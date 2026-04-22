@@ -1,6 +1,7 @@
 const express = require('express');
-const http = require('http');
+const https = require('https');
 const WebSocket = require('ws');
+const selfsigned = require('selfsigned');
 const cookieParser = require('cookie-parser');
 const qrcode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
@@ -26,7 +27,14 @@ function getLocalIP() {
 }
 
 const LOCAL_IP = getLocalIP();
-const BASE_URL = `http://${LOCAL_IP}:${PORT}`;
+const BASE_URL = `https://${LOCAL_IP}:${PORT}`;
+
+// --- Self-signed TLS cert (generated once at startup) ---
+const pems = selfsigned.generate([{ name: 'commonName', value: LOCAL_IP }], {
+  days: 365,
+  algorithm: 'sha256',
+  extensions: [{ name: 'subjectAltName', altNames: [{ type: 7, ip: LOCAL_IP }] }],
+});
 
 // --- State ---
 // Map<cameraId, { label, ws, frameBuffer: Buffer|null, mjpegClients: Set<res> }>
@@ -194,8 +202,8 @@ function removeCamera(cameraId) {
   }
 }
 
-// --- HTTP + WebSocket server ---
-const server = http.createServer(app);
+// --- HTTPS + WebSocket server ---
+const server = https.createServer({ key: pems.private, cert: pems.cert }, app);
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
@@ -261,9 +269,10 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`RAD Panoptvs running`);
-  console.log(`  Local:   http://localhost:${PORT}`);
+  console.log(`RAD Panoptvs running (HTTPS)`);
+  console.log(`  Local:   https://localhost:${PORT}`);
   console.log(`  Network: ${BASE_URL}`);
-  console.log(`  Admin:   http://localhost:${PORT}/admin  (password: ${ADMIN_PASSWORD})`);
+  console.log(`  Admin:   https://localhost:${PORT}/admin  (password: ${ADMIN_PASSWORD})`);
   console.log(`  Share QR URL with mobile participants: ${BASE_URL}`);
+  console.log(`  NOTE: Browsers will warn about the self-signed cert — click "Advanced > Proceed" to continue.`);
 });
