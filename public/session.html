@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>RAD Panoptvs — Camera</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; color: #fff; font-family: sans-serif; height: 100dvh; display: flex; flex-direction: column; }
+  #video-wrap { flex: 1; position: relative; overflow: hidden; }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #status { padding: 0.6rem 1rem; font-size: 0.85rem; background: rgba(0,0,0,0.7); text-align: center; min-height: 2.2rem; }
+  #status.error { color: #f66; }
+  #status.ok { color: #6f6; }
+  #status.warn { color: #fa0; }
+</style>
+</head>
+<body>
+<div id="video-wrap">
+  <video id="preview" autoplay muted playsinline></video>
+</div>
+<div id="status" class="warn">Starting camera…</div>
+
+<script>
+  const CAMERA_ID = crypto.randomUUID();
+  let cameraIndex = Math.floor(Math.random() * 9000) + 1000;
+  const LABEL = `Camera ${cameraIndex}`;
+
+  const video = document.getElementById('preview');
+  const statusEl = document.getElementById('status');
+
+  let ws = null;
+  let wsReady = false;
+  let frameInterval = null;
+  let stream = null;
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  function setStatus(msg, cls = '') {
+    statusEl.textContent = msg;
+    statusEl.className = cls;
+  }
+
+  // --- Camera ---
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+      setStatus('Camera active. Connecting…', 'warn');
+      connectWS();
+    } catch (err) {
+      setStatus('Camera access denied. Please allow camera permission and reload.', 'error');
+    }
+  }
+
+  // --- WebSocket ---
+  function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}`);
+
+    ws.onopen = () => {
+      wsReady = true;
+      ws.send(JSON.stringify({ type: 'camera-announce', id: CAMERA_ID, label: LABEL }));
+    };
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'connected') {
+          setStatus(`Streaming as ${LABEL}`, 'ok');
+          startFrameLoop();
+        }
+        // ping / keepalive — no action needed
+      } catch (_) {}
+    };
+
+    ws.onclose = () => {
+      wsReady = false;
+      stopFrameLoop();
+      setStatus('Disconnected. Reconnecting…', 'warn');
+      setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  }
+
+  // --- Frame loop ---
+  function startFrameLoop() {
+    if (frameInterval) return;
+    frameInterval = setInterval(captureFrame, 66); // ~15fps
+  }
+
+  function stopFrameLoop() {
+    if (frameInterval) { clearInterval(frameInterval); frameInterval = null; }
+  }
+
+  function captureFrame() {
+    if (!wsReady || ws.readyState !== WebSocket.OPEN) return;
+    if (!video.videoWidth) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        // reader.result is "data:image/jpeg;base64,<data>"
+        const b64 = reader.result.split(',')[1];
+        ws.send(JSON.stringify({ type: 'frame', cameraId: CAMERA_ID, data: b64 }));
+      };
+      reader.readAsDataURL(blob);
+    }, 'image/jpeg', 0.7);
+  }
+
+  // --- Init ---
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus('This browser does not support camera access.', 'error');
+  } else {
+    startCamera();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAD Panoptvs — Admin</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: sans-serif; background: #fff; color: #111; max-width: 860px; margin: 0 auto; padding: 1.5rem; }
+  h1 { margin-bottom: 0.25rem; }
+  h2 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
+  #qr-section { text-align: center; margin-bottom: 1.5rem; }
+  #qr-img { display: block; margin: 0 auto 0.5rem; border: 1px solid #ddd; }
+  #qr-url { font-family: monospace; font-size: 1rem; color: #333; }
+  #camera-list { list-style: none; padding: 0; }
+  #camera-list li { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 0.6rem; display: flex; flex-direction: column; gap: 0.25rem; }
+  #camera-list li .cam-label { font-weight: bold; }
+  #camera-list li .cam-url { font-family: monospace; font-size: 0.85rem; color: #0066cc; word-break: break-all; }
+  #camera-list li .cam-url a { color: inherit; }
+  #empty { color: #888; font-style: italic; }
+  #ws-status { font-size: 0.8rem; margin-top: 0.3rem; }
+  #ws-status.ok { color: green; }
+  #ws-status.warn { color: orange; }
+</style>
+</head>
+<body>
+<h1>RAD Panoptvs</h1>
+<p id="ws-status" class="warn">Connecting…</p>
+
+<div id="qr-section">
+  <h2>Share with participants</h2>
+  <img id="qr-img" src="" alt="QR Code" width="300" height="300">
+  <div id="qr-url">Loading…</div>
+</div>
+
+<h2>Active Cameras</h2>
+<ul id="camera-list">
+  <li id="empty">No cameras connected.</li>
+</ul>
+
+<script>
+  let ws = null;
+  let wsReady = false;
+  const statusEl = document.getElementById('ws-status');
+
+  // --- Load QR code ---
+  fetch('/qrcode-data')
+    .then(r => r.json())
+    .then(({ qrDataUrl, url }) => {
+      document.getElementById('qr-img').src = qrDataUrl;
+      const urlEl = document.getElementById('qr-url');
+      urlEl.innerHTML = `<a href="${url}" target="_blank">${url}</a>`;
+    })
+    .catch(() => {
+      document.getElementById('qr-url').textContent = 'QR unavailable';
+    });
+
+  // --- Camera list rendering ---
+  function renderCameras(cameras) {
+    const list = document.getElementById('camera-list');
+    list.innerHTML = '';
+    if (!cameras || cameras.length === 0) {
+      list.innerHTML = '<li id="empty">No cameras connected.</li>';
+      return;
+    }
+    for (const cam of cameras) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="cam-label">${escHtml(cam.label)}</span>
+        <span class="cam-url"><a href="${escHtml(cam.streamUrl)}" target="_blank">${escHtml(cam.streamUrl)}</a></span>
+      `;
+      list.appendChild(li);
+    }
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // --- WebSocket ---
+  function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}`);
+
+    ws.onopen = () => {
+      wsReady = true;
+      statusEl.textContent = 'Connected';
+      statusEl.className = 'ok';
+      ws.send(JSON.stringify({ type: 'admin-announce' }));
+    };
+
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'camera-list') {
+          renderCameras(msg.cameras);
+        }
+      } catch (_) {}
+    };
+
+    ws.onclose = () => {
+      wsReady = false;
+      statusEl.textContent = 'Disconnected — reconnecting…';
+      statusEl.className = 'warn';
+      setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  }
+
+  connectWS();
+</script>
+</body>
+</html>

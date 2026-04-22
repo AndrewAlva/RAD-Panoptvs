@@ -1,0 +1,16 @@
+{
+  "name": "rad-panoptvs",
+  "version": "1.0.0",
+  "description": "WebSocket camera streaming server for TouchDesigner",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.18.2",
+    "qrcode": "^1.5.3",
+    "uuid": "^9.0.0",
+    "ws": "^8.14.2"
+  }
+}
