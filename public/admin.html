@@ -6,18 +6,20 @@
 <title>RAD Panoptvs — Admin</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: sans-serif; background: #fff; color: #111; max-width: 860px; margin: 0 auto; padding: 1.5rem; }
+  body { font-family: sans-serif; background: #fff; color: #111; max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
   h1 { margin-bottom: 0.25rem; }
   h2 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
   #qr-section { text-align: center; margin-bottom: 1.5rem; }
   #qr-img { display: block; margin: 0 auto 0.5rem; border: 1px solid #ddd; }
   #qr-url { font-family: monospace; font-size: 1rem; color: #333; }
-  #camera-list { list-style: none; padding: 0; }
-  #camera-list li { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 0.6rem; display: flex; flex-direction: column; gap: 0.25rem; }
-  #camera-list li .cam-label { font-weight: bold; }
-  #camera-list li .cam-url { font-family: monospace; font-size: 0.85rem; color: #0066cc; word-break: break-all; }
-  #camera-list li .cam-url a { color: inherit; }
-  #empty { color: #888; font-style: italic; }
+  #camera-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; padding: 0; list-style: none; }
+  #camera-grid li { border: 1px solid #ddd; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
+  .cam-feed { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #111; display: block; }
+  .cam-info { padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.2rem; }
+  .cam-label { font-weight: bold; font-size: 0.95rem; }
+  .cam-url { font-family: monospace; font-size: 0.78rem; color: #0066cc; word-break: break-all; }
+  .cam-url a { color: inherit; }
+  #empty { color: #888; font-style: italic; padding: 0; border: none; }
   #ws-status { font-size: 0.8rem; margin-top: 0.3rem; }
   #ws-status.ok { color: green; }
   #ws-status.warn { color: orange; }
@@ -34,7 +36,7 @@
 </div>
 
 <h2>Active Cameras</h2>
-<ul id="camera-list">
+<ul id="camera-grid">
   <li id="empty">No cameras connected.</li>
 </ul>
 
@@ -55,21 +57,26 @@
       document.getElementById('qr-url').textContent = 'QR unavailable';
     });
 
-  // --- Camera list rendering ---
+  // --- Camera grid rendering ---
   function renderCameras(cameras) {
-    const list = document.getElementById('camera-list');
-    list.innerHTML = '';
+    const grid = document.getElementById('camera-grid');
+    grid.innerHTML = '';
     if (!cameras || cameras.length === 0) {
-      list.innerHTML = '<li id="empty">No cameras connected.</li>';
+      grid.innerHTML = '<li id="empty">No cameras connected.</li>';
       return;
     }
     for (const cam of cameras) {
       const li = document.createElement('li');
+      const url = escHtml(cam.streamUrl);
+      const label = escHtml(cam.label);
       li.innerHTML = `
-        <span class="cam-label">${escHtml(cam.label)}</span>
-        <span class="cam-url"><a href="${escHtml(cam.streamUrl)}" target="_blank">${escHtml(cam.streamUrl)}</a></span>
+        <img class="cam-feed" src="${url}" alt="${label}">
+        <div class="cam-info">
+          <span class="cam-label">${label}</span>
+          <span class="cam-url"><a href="${url}" target="_blank">${url}</a></span>
+        </div>
       `;
-      list.appendChild(li);
+      grid.appendChild(li);
     }
   }
 
