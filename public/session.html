@@ -22,7 +22,13 @@
 <div id="status" class="warn">Starting camera…</div>
 
 <script>
-  const CAMERA_ID = crypto.randomUUID();
+  function generateId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+  const CAMERA_ID = generateId();
   let cameraIndex = Math.floor(Math.random() * 9000) + 1000;
   const LABEL = `Camera ${cameraIndex}`;
 
